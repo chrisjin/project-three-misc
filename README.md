@@ -8,15 +8,29 @@ The game is a Godot prototype with a playable placement core and a roguelike dir
 
 ## See it in motion
 
-| Placing and matching | Gravity and impacts |
-| --- | --- |
-| ![Drag two cards from the hand and place them one after another](media/regular_matching.gif) | ![An iron ball falls, breaks through Slimes, and lands on solid support](media/iron_ball_falling.gif) |
-| Drag cards onto the board and connect compatible symbols. | Watch a placement change the board through gravity. |
+### Placing and matching
 
-| Phoenix migration | Worm eating |
-| --- | --- |
-| ![A Phoenix flies to burning marked Wood and leaves Fire behind](media/phoenix_migration.gif) | ![A Worm moves toward Bread and eats it over successive placements](media/worm_eating.gif) |
-| A distant interaction draws the Phoenix across the board. | Each placement creates another opportunity for the Worm to move. |
+![Drag two cards from the hand and place them one after another](media/regular_matching.gif)
+
+Drag cards onto the board and connect compatible symbols.
+
+### Gravity and impacts
+
+![An iron ball falls, breaks through Slimes, and lands on solid support](media/iron_ball_falling.gif)
+
+Watch a placement change the board through gravity.
+
+### Phoenix migration
+
+![A Phoenix flies to burning marked Wood and leaves Fire behind](media/phoenix_migration.gif)
+
+A distant interaction draws the Phoenix across the board.
+
+### Worm eating
+
+![A Worm moves toward Bread and eats it over successive placements](media/worm_eating.gif)
+
+Each placement creates another opportunity for the Worm to move.
 
 These looping demonstrations use the prototype's simulation, artwork, placement previews, and animation system. The cursor in the matching demonstration is choreographed for clarity.
 
