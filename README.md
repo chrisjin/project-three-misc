@@ -167,6 +167,77 @@ This focused excerpt from `default_config.json` shows an Event declaration, a Re
 - **Capability:** the binding connects `PHOENIX_MIGRATION` to `MIGRATE_PHOENIX`. The empty objects in the binding reference the registered definitions with their existing settings. This Capability is an intrinsic global behavior and does not award score.
 - **Action:** the runtime schedules a turn for each candidate. When that turn runs, it evaluates the current participants and applies the Reward. Actions are runtime work created from the definitions above.
 
+#### Example: Iron Ball gravity
+
+This excerpt connects the Iron Ball's gravity Property to an Event, a Reward, and a Capability. It assumes the existing support-change searches and smash-handling definitions from the full configuration.
+
+```json
+{
+  "symbols": {
+    "IRON_BALL": {
+      "properties": {
+        "GRAVITY": {}
+      }
+    }
+  },
+  "properties": {
+    "GRAVITY": {
+      "property_id": "GRAVITY",
+      "data": {
+        "direction": "S"
+      },
+      "data_scope": "per-level"
+    }
+  },
+  "events": {
+    "GRAVITY_FALL": {
+      "event_id": "GRAVITY_FALL",
+      "phase": "action",
+      "evaluate_in_preview": true,
+      "parameters": {
+        "gravityPropertyId": "GRAVITY"
+      }
+    }
+  },
+  "rewards": {
+    "GRAVITY_FALL": {
+      "type": "gravity_fall",
+      "reward_id": "GRAVITY_FALL",
+      "reward_definition": {
+        "gravityPropertyId": "GRAVITY",
+        "smashablePropertyId": "SMASHABLE",
+        "smashedEventId": "SMASHED"
+      }
+    }
+  },
+  "capabilities": {
+    "GRAVITY_SYSTEM": {
+      "scoring": false,
+      "scope": {
+        "target": "global"
+      },
+      "intrinsic": true,
+      "event_reward_pairs": [
+        {
+          "event": {
+            "GRAVITY_FALL": {}
+          },
+          "reward": {
+            "GRAVITY_FALL": {}
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+- **Property:** `IRON_BALL` references `GRAVITY`, which supplies the downward direction `S` and a per-level state lifecycle. The empty reference object uses the registered Property's settings.
+- **Event:** `GRAVITY_FALL` identifies affected gravity cells when relevant changes may alter their support. Its `gravityPropertyId` parameter tells the existing searches which Property to look for. This Event is evaluated in placement previews.
+- **Reward:** the `gravity_fall` handler resolves the acting ball's fall, removes cells marked `SMASHABLE` that it encounters, and emits `SMASHED` events. A separate scoring Capability handles those events, keeping physical effects and scoring independently configured.
+- **Capability:** `GRAVITY_SYSTEM` binds the `GRAVITY_FALL` Event to the Reward of the same name. It is an intrinsic global behavior, and the gravity Capability itself does not award score.
+- **Action:** each affected ball gets its own scheduled turn. When that turn runs, it checks the current board and resolves the ball to rest or off the board. A ball that remains supported stays in place.
+
 ### Resolution lifecycle
 
 A world change can make another behavior relevant. The resolver routes that change, schedules the affected work, and evaluates it against the state left by earlier actions. A response can then produce another change and continue the chain.
