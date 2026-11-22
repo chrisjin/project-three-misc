@@ -115,6 +115,58 @@ Here, **reward** is an engine term for an effect. It is broader than the card ch
 
 An Event describes what to recognize. A Reward describes the response. An Action gives that behavior a place in the execution sequence. State-changing rewards also produce mutation records, which let the committed result be represented consistently in the world and explained by the interface.
 
+#### Example: Phoenix migration
+
+This focused excerpt from `default_config.json` shows an Event declaration, a Reward definition, and the Capability that connects them. It assumes the existing participant searches, symbol definitions, and property setup from the full configuration.
+
+```json
+{
+  "events": {
+    "PHOENIX_MIGRATION": {
+      "event_id": "PHOENIX_MIGRATION",
+      "phase": "action",
+      "evaluate_in_preview": false
+    }
+  },
+  "rewards": {
+    "MIGRATE_PHOENIX": {
+      "type": "migrate_phoenix",
+      "reward_id": "MIGRATE_PHOENIX",
+      "reward_definition": {
+        "sourceReplacementSymbolId": "FIRE",
+        "destinationSymbolId": "FIRE",
+        "phoenixesSearchResult": "phoenixes",
+        "distanceMetric": "manhattan"
+      }
+    }
+  },
+  "capabilities": {
+    "PHOENIX_MIGRATION": {
+      "scoring": false,
+      "scope": {
+        "target": "global"
+      },
+      "intrinsic": true,
+      "event_reward_pairs": [
+        {
+          "event": {
+            "PHOENIX_MIGRATION": {}
+          },
+          "reward": {
+            "MIGRATE_PHOENIX": {}
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+- **Event:** burning marked Wood produces a migration candidate. The existing Event search identifies that destination and supplies the available Phoenixes as the named result `phoenixes`. Migration is resolved during the action phase and excluded from placement previews.
+- **Reward:** `MIGRATE_PHOENIX` reads that named result, chooses the nearest Phoenix by Manhattan distance, moves it onto the candidate Fire, and leaves Fire at its departure cell. The destination Fire is consumed by the migration.
+- **Capability:** the binding connects `PHOENIX_MIGRATION` to `MIGRATE_PHOENIX`. The empty objects in the binding reference the registered definitions with their existing settings. This Capability is an intrinsic global behavior and does not award score.
+- **Action:** the runtime schedules a turn for each candidate. When that turn runs, it evaluates the current participants and applies the Reward. Actions are runtime work created from the definitions above.
+
 ### Resolution lifecycle
 
 A world change can make another behavior relevant. The resolver routes that change, schedules the affected work, and evaluates it against the state left by earlier actions. A response can then produce another change and continue the chain.
