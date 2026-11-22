@@ -81,7 +81,9 @@ The board and its entities form the shared world model. Searches inspect that mo
 
 ### Event, Reward, and Action model
 
-Behavior is described through a small set of domain concepts. Their responsibilities are deliberately separate.
+The behavior-definition layer of `default_config.json` forms a **declarative domain-specific language (DSL)** for the simulation. JSON supplies its notation; the game's concepts supply its vocabulary and meaning. Authors describe the entities, situations, and responses that make up a behavior. The engine gives those descriptions their execution semantics.
+
+Alongside ordinary run and presentation settings, the file brings together symbol and property definitions, spatial searches, qualifying conditions, and Event-to-Reward bindings. These constructs let content authors compose behaviors from the operations the engine supports.
 
 | Concept | Responsibility |
 | --- | --- |
@@ -91,6 +93,23 @@ Behavior is described through a small set of domain concepts. Their responsibili
 | **Capability** | Connects event definitions to rewards available in the current context. |
 | **Reward** | Specifies the response to a qualifying event, such as a state change or a score contribution. |
 | **Action** | Represents a scheduled unit of behavior evaluated and resolved against the current world state. |
+
+```mermaid
+flowchart TB
+    subgraph Language["Behavior definitions in default_config.json"]
+        Vocabulary["Symbols and Properties"] --> Events["Events: searches and conditions"]
+        Vocabulary --> Rewards["Rewards: supported effects"]
+        Events --> Composition["Capabilities bind Events to Rewards"]
+        Rewards --> Composition
+    end
+
+    Composition --> Validation["Validation and preparation"]
+    Validation --> Runtime["Runtime resolution"]
+    Runtime --> Actions["Scheduled Actions"]
+    Actions --> Outcome["State changes and scoring results"]
+```
+
+Validation checks the definitions and their references before play. The runtime uses the prepared definitions to recognize relevant situations and schedule Actions for board-changing behavior. An Action evaluates the current state and applies the configured Rewards through registered engine operations.
 
 Here, **reward** is an engine term for an effect. It is broader than the card choices offered between levels.
 
