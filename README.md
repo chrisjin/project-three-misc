@@ -89,6 +89,7 @@ Alongside ordinary run and presentation settings, the file brings together symbo
 | --- | --- |
 | **Property** | Describes a characteristic or state associated with a game entity. |
 | **Event** | Defines an occurrence or qualifying situation that the simulation can recognize. |
+| **Re-evaluation rule** | Connects world-change notifications to participant searches that make an Event eligible for evaluation. |
 | **Search and condition** | Identifies relevant participants and determines whether they qualify. |
 | **Capability** | Connects event definitions to rewards available in the current context. |
 | **Reward** | Specifies the response to a qualifying event, such as a state change or a score contribution. |
@@ -115,9 +116,35 @@ Here, **reward** is an engine term for an effect. It is broader than the card ch
 
 An Event describes what to recognize. A Reward describes the response. An Action gives that behavior a place in the execution sequence. State-changing rewards also produce mutation records, which let the committed result be represented consistently in the world and explained by the interface.
 
+#### Re-evaluation and action scheduling
+
+For Events that react to world changes, `re_evaluate_conditions` declares the notifications that wake evaluation and the searches that find relevant participants. It is a core part of the DSL: the dependency between a world change and a possible response is authored in configuration.
+
+For an action-phase Event, each search pipeline separates **source discovery** from **action-time evaluation**. Discovery identifies the actors whose turns should be scheduled. Each turn then searches the current board and produces a qualifying Event result before its bound Rewards run.
+
+| Construct | Role |
+| --- | --- |
+| `events` | Names the world-change notifications that initiate re-evaluation. |
+| `source.steps` and `source.results` | Discover the Action's source cells and identify the named results that define its source. |
+| `scope: "split"` and `split_on` | Partition discovered sources into individual Actions. |
+| `steps`, starting with `scope: "source"` | Bind the scheduled source and evaluate the Action against the current world state. |
+| `as` and `triggerEvent.values` | Name search results and expose the selected results to Reward handlers. |
+| `triggerEvent.condition` and `acting_cell` | Decide whether to produce an Event result and identify the cell in whose context its Rewards run. |
+
+```mermaid
+flowchart TB
+    Change["World-change notification"] --> Dependency["Match re_evaluate_conditions.events"]
+    Dependency --> Discovery["Run source.steps and bind named sources"]
+    Discovery --> Queue["Schedule Actions for the discovered sources"]
+    Queue --> Search["Run action steps against the current board"]
+    Search --> Trigger["triggerEvent: condition, values, acting_cell"]
+    Trigger -->|Qualifying Event result| Rewards["Execute Capability-bound Rewards"]
+    Rewards -->|Committed world changes| Change
+```
+
 #### Example: Phoenix migration
 
-This focused excerpt from `default_config.json` shows an Event declaration, a Reward definition, and the Capability that connects them. It assumes the existing participant searches, symbol definitions, and property setup from the full configuration.
+This excerpt from `default_config.json` includes the migration Event's complete `re_evaluate_conditions`, its Reward, and the Capability that connects them. Symbol definitions and the preceding marking and burning setup remain in the full configuration.
 
 ```json
 {
@@ -125,7 +152,41 @@ This focused excerpt from `default_config.json` shows an Event declaration, a Re
     "PHOENIX_MIGRATION": {
       "event_id": "PHOENIX_MIGRATION",
       "phase": "action",
-      "evaluate_in_preview": false
+      "evaluate_in_preview": false,
+      "re_evaluate_conditions": [
+        {
+          "events": ["CELL_ADDED"],
+          "search": [
+            {
+              "source": {
+                "steps": [
+                  {
+                    "scope": "all_cells_from_origin_events",
+                    "symbols": {"FIRE": {}},
+                    "properties": {"PHOENIX_MIGRATION_CANDIDATE": {}},
+                    "as": "candidate"
+                  },
+                  {"scope": "split", "split_on": ["candidate"]}
+                ],
+                "results": ["candidate"]
+              },
+              "steps": [
+                {"scope": "source"},
+                {
+                  "scope": "all",
+                  "symbols": {"PHOENIX": {}},
+                  "as": "phoenixes",
+                  "triggerEvent": {
+                    "condition": {"non-empty": "phoenixes"},
+                    "values": ["candidate", "phoenixes"],
+                    "acting_cell": "candidate"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "rewards": {
@@ -162,14 +223,14 @@ This focused excerpt from `default_config.json` shows an Event declaration, a Re
 }
 ```
 
-- **Event:** burning marked Wood produces a migration candidate. The existing Event search identifies that destination and supplies the available Phoenixes as the named result `phoenixes`. Migration is resolved during the action phase and excluded from placement previews.
+- **Event:** `CELL_ADDED` wakes the configured search. Its `source` filters the added cells for Fire carrying `PHOENIX_MIGRATION_CANDIDATE`, names the result `candidate`, and splits it into one source per destination. On that source's turn, `scope: "source"` binds the candidate, the next step finds `phoenixes`, and `triggerEvent` produces a result when that list is nonempty. Its `values` expose both named results, while `acting_cell` identifies the candidate. Migration is excluded from placement previews.
 - **Reward:** `MIGRATE_PHOENIX` reads that named result, chooses the nearest Phoenix by Manhattan distance, moves it onto the candidate Fire, and leaves Fire at its departure cell. The destination Fire is consumed by the migration.
 - **Capability:** the binding connects `PHOENIX_MIGRATION` to `MIGRATE_PHOENIX`. The empty objects in the binding reference the registered definitions with their existing settings. This Capability is an intrinsic global behavior and does not award score.
 - **Action:** the runtime schedules a turn for each candidate. When that turn runs, it evaluates the current participants and applies the Reward. Actions are runtime work created from the definitions above.
 
 #### Example: Iron Ball gravity
 
-This excerpt connects the Iron Ball's gravity Property to an Event, a Reward, and a Capability. It assumes the existing support-change searches and smash-handling definitions from the full configuration.
+This excerpt connects the Iron Ball's gravity Property to an Event, a Reward, and a Capability. It includes all three `re_evaluate_conditions` entries for additions, transformations, and vacated cells. Related smash-handling definitions remain in the full configuration.
 
 ```json
 {
@@ -196,7 +257,99 @@ This excerpt connects the Iron Ball's gravity Property to an Event, a Reward, an
       "evaluate_in_preview": true,
       "parameters": {
         "gravityPropertyId": "GRAVITY"
-      }
+      },
+      "re_evaluate_conditions": [
+        {
+          "events": ["CELL_ADDED"],
+          "search": [
+            {
+              "source": {
+                "steps": [
+                  {
+                    "scope": "offsets",
+                    "base": "all_cells_from_origin_events",
+                    "offsets": [[0, 0]],
+                    "properties": {"$gravityPropertyId": {"direction": "S"}},
+                    "as": "gravity"
+                  },
+                  {"scope": "split", "split_on": ["gravity"]}
+                ],
+                "results": ["gravity"]
+              },
+              "steps": [
+                {
+                  "scope": "source",
+                  "triggerEvent": {
+                    "condition": {"non-empty": "gravity"},
+                    "values": ["gravity"],
+                    "acting_cell": "gravity"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "events": ["CELL_TRANSFORMATION"],
+          "search": [
+            {
+              "source": {
+                "steps": [
+                  {
+                    "scope": "offsets",
+                    "base": "all_cells_from_origin_events",
+                    "offsets": [[0, 0], [0, -1]],
+                    "properties": {"$gravityPropertyId": {"direction": "S"}},
+                    "as": "gravity"
+                  },
+                  {"scope": "split", "split_on": ["gravity"]}
+                ],
+                "results": ["gravity"]
+              },
+              "steps": [
+                {
+                  "scope": "source",
+                  "triggerEvent": {
+                    "condition": {"non-empty": "gravity"},
+                    "values": ["gravity"],
+                    "acting_cell": "gravity"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "events": ["CELL_REMOVED", "CELL_MOVE_START"],
+          "search": [
+            {
+              "source": {
+                "steps": [
+                  {
+                    "scope": "offsets",
+                    "base": "all_cells_from_origin_events",
+                    "offsets": [[0, -1]],
+                    "properties": {"$gravityPropertyId": {"direction": "S"}},
+                    "as": "gravity"
+                  },
+                  {"scope": "split", "split_on": ["gravity"]}
+                ],
+                "results": ["gravity"]
+              },
+              "steps": [
+                {
+                  "scope": "source",
+                  "triggerEvent": {
+                    "condition": {"non-empty": "gravity"},
+                    "values": ["gravity"],
+                    "acting_cell": "gravity"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   },
   "rewards": {
@@ -233,7 +386,7 @@ This excerpt connects the Iron Ball's gravity Property to an Event, a Reward, an
 ```
 
 - **Property:** `IRON_BALL` references `GRAVITY`, which supplies the downward direction `S` and a per-level state lifecycle. The empty reference object uses the registered Property's settings.
-- **Event:** `GRAVITY_FALL` identifies affected gravity cells when relevant changes may alter their support. Its `gravityPropertyId` parameter tells the existing searches which Property to look for. This Event is evaluated in placement previews.
+- **Event:** each `re_evaluate_conditions` entry pairs notifications with the relevant search offsets. Additions inspect the added position; transformations inspect that position and the cell above; removals and move starts inspect the cell above the vacated position. `parameters.gravityPropertyId` supplies the `$gravityPropertyId` used by the filters. Each search names its matches `gravity`, splits them into individual sources, and uses `triggerEvent` to expose the acting ball. This Event is evaluated in placement previews.
 - **Reward:** the `gravity_fall` handler resolves the acting ball's fall, removes cells marked `SMASHABLE` that it encounters, and emits `SMASHED` events. A separate scoring Capability handles those events, keeping physical effects and scoring independently configured.
 - **Capability:** `GRAVITY_SYSTEM` binds the `GRAVITY_FALL` Event to the Reward of the same name. It is an intrinsic global behavior, and the gravity Capability itself does not award score.
 - **Action:** each affected ball gets its own scheduled turn. When that turn runs, it checks the current board and resolves the ball to rest or off the board. A ball that remains supported stays in place.
